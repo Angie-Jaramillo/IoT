@@ -28,12 +28,7 @@ buzzer_t buzzer = {
     .is_on = false,
 };
 
-motor_t motor = {
-    .in1       = GPIO_NUM_19,
-    .in2       = GPIO_NUM_20,
-    .pwm       = GPIO_NUM_17,
-    .direction = true,
-};
+static motor_t motor;
 
 static void taskADC(void *pvParameters)
 {
@@ -108,19 +103,21 @@ static void task_buzzer(void *arg)
 }
  
 //  MOTOR TASK 
-static void task_motor(void *pvParameters)
+void motor_task(void *pvParameters)
 {
+    bool direction = true;
+    const uint32_t duty = 1023;  // velocidad media
 
     while (1)
     {
         motor_stop(&motor);
         RTOS_delay(200);
- 
-        motor_set_direction(&motor);
-        motor_set_speed(&motor, MOTOR_DUTY_MED);
+
+        motor_set_direction(&motor, direction);
+        motor_set_speed(&motor, duty);
+
         RTOS_delay(3000);
- 
-        motor.direction = !motor.direction;
+        direction = !direction;
     }
 }
  
@@ -147,7 +144,6 @@ static void task_monitor(void *arg)
         if (xQueueReceive(dht_queue, &dht_data, 0) == pdTRUE) {
             ESP_LOGI(TAG, "(T, H) = (%.1f°C, %.1f%%)",
                      dht_data.temperature, dht_data.humidity);
-            // oled_draw_temp_hum(dht_data.temperature, dht_data.humidity);
         }
         RTOS_delay(1000);
     }
@@ -190,7 +186,7 @@ void app_main(void)
     do_calibration = adc_calibration_init();
     adc_dma_setup();
  
-    motor_init(&motor);
+    motor_init(&motor, GPIO_NUM_17, GPIO_NUM_19, GPIO_NUM_20);
     buzzer_init(&buzzer);
 
     audio_init();
@@ -203,7 +199,7 @@ void app_main(void)
     xTaskCreate(task_dht,     "task_dht",     2048, NULL, 4, NULL);
     xTaskCreate(task_monitor, "task_monitor", 2048, NULL, 3, NULL);
     xTaskCreate(task_sunrise, "task_sunrise", 4096, NULL, 4, NULL);
-    xTaskCreate(task_motor,   "task_motor",   2048, NULL, 4, NULL);
+    xTaskCreate(motor_task, "motor_task", 2048, NULL, 5, NULL);
     xTaskCreate(taskADC,   "ADC",   4096, NULL, 3, NULL);
     xTaskCreate(taskAudio, "Audio", 4096, NULL, 2, NULL);
     xTaskCreate(taskLight, "Light", 4096, NULL, 2, NULL);
